@@ -13,6 +13,7 @@ on:
         value: ${{ jobs.overall-status.outputs.status }}
 
 jobs:
+  # Linux GPU Miner Build Job
   build-lotus-gpu-miner:
     name: 🔥 Build lotus-gpu-miner (Linux)
     runs-on: ubuntu-latest
@@ -24,6 +25,13 @@ jobs:
       uses: actions/checkout@v3
       with:
         ref: ${{ github.ref_name }}
+        fetch-depth: 0
+
+    - name: Set up job environment
+      run: |
+        echo "Running on branch: ${{ github.ref_name }}"
+        echo "Build version: ${{ inputs.version }}"
+        echo "Repository: ${{ github.repository }}"
 
     - name: Setup Docker
       uses: docker/setup-buildx-action@v2
@@ -178,6 +186,7 @@ jobs:
   # Call the Windows build workflow
   build-lotus-gpu-miner-windows:
     name: 🪟 Build lotus-gpu-miner (Windows)
+    if: always() # Always run the Windows build, even if Linux build fails
     uses: ./.github/workflows/lotus-miner-windows-build.yml
     with:
       version: ${{ inputs.version }}
@@ -187,7 +196,7 @@ jobs:
   overall-status:
     name: 📊 Overall build status
     needs: [build-lotus-gpu-miner, build-lotus-gpu-miner-windows]
-    if: always()
+    if: always() # Always run this step, even if previous jobs failed
     runs-on: ubuntu-latest
     outputs:
       status: ${{ job.status }}
@@ -195,15 +204,25 @@ jobs:
     steps:
       - name: Check build status
         run: |
+          echo "Linux build result: ${{ needs.build-lotus-gpu-miner.result }}"
+          echo "Windows build result: ${{ needs.build-lotus-gpu-miner-windows.result }}"
+          
+          FAILED=0
+          
           if [ "${{ needs.build-lotus-gpu-miner.result }}" != "success" ]; then
             echo "Linux build failed with status: ${{ needs.build-lotus-gpu-miner.result }}"
-            exit 1
+            FAILED=1
           fi
           
           if [ "${{ needs.build-lotus-gpu-miner-windows.result }}" != "success" ]; then
             echo "Windows build failed with status: ${{ needs.build-lotus-gpu-miner-windows.result }}"
-            exit 1
+            FAILED=1
           fi
           
-          echo "All builds completed successfully!"
+          if [ $FAILED -eq 0 ]; then
+            echo "All builds completed successfully!"
+          else
+            echo "One or more builds failed!"
+            exit 1
+          fi
         

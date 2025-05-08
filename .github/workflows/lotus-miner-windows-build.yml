@@ -33,13 +33,6 @@ jobs:
         override: true
         components: rustfmt, clippy
 
-    - name: Setup CUDA
-      uses: Jimver/cuda-toolkit@v0.2.11
-      with:
-        cuda: '12.2.0'
-        method: 'network'
-        sub-packages: '["nvcc","cublas","cublas_dev","cudart","cudart_dev","curand","curand_dev"]'
-
     - name: Cache Rust dependencies
       uses: Swatinem/rust-cache@v2
       with:
@@ -59,9 +52,6 @@ jobs:
         # Debug information
         echo "Current directory: $(Get-Location)"
         echo "Branch name: $env:GITHUB_REF_NAME"
-        
-        # Set environment variables for the build
-        $env:CUDA_PATH = "$env:CUDA_PATH_V12_2"
         
         # Check if gpuminer directory exists
         if (Test-Path -Path "gpuminer") {
@@ -122,9 +112,6 @@ jobs:
         # Capture Rust version info
         rustc --version > ../debug-info/rust-version-info.txt
         cargo --version >> ../debug-info/rust-version-info.txt
-        
-        # Capture CUDA version info
-        nvcc --version > ../debug-info/cuda-version-info.txt
         
         echo "Windows build completed successfully."
 

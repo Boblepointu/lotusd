@@ -35,11 +35,15 @@ jobs:
       - name: Check branch name
         id: check-branch
         run: |
+          echo "Current branch: ${{ github.ref_name }}"
           if [[ "${{ github.ref_name }}" == "windowsMiner" ]]; then
             echo "is_windows_branch=true" >> $GITHUB_OUTPUT
-            echo "Running on windowsMiner branch, will skip non-miner builds"
+            echo "Running on windowsMiner branch - will focus on miner builds"
+            echo "Linux and Windows miners will be built"
+            echo "Other components will be skipped"
           else
             echo "is_windows_branch=false" >> $GITHUB_OUTPUT
+            echo "Running on standard branch - all components will be built"
           fi
 
   # Build components in parallel
@@ -71,7 +75,7 @@ jobs:
     secrets: inherit
 
   build-miner:
-    name: ⛏️ Mining Components (Linux + Windows)
+    name: ${{ needs.check-windows-branch.outputs.is_windows_branch == 'true' && '⛏️ Mining Components (Windows Branch)' || '⛏️ Mining Components (Linux + Windows)' }}
     needs: [ version-management, check-windows-branch ]
     if: always() && (needs.check-windows-branch.outputs.is_windows_branch == 'true' || needs.version-management.outputs.should_bump == 'false' || needs.version-management.outputs.version_bumped == 'true')
     uses: ./.github/workflows/lotus-miner-build.yml
