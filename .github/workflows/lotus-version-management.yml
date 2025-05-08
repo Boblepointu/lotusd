@@ -47,13 +47,24 @@ jobs:
     - name: Check if version bump is needed
       id: check-bump
       run: |
-        # Get the latest tag
-        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
-        echo "Latest tag: $LATEST_TAG"
+        # Get the latest tag that matches our branch pattern
+        BRANCH="${{ github.ref_name }}"
+        
+        # For main/master branches, look for tags without branch suffix
+        # For feature branches, look for tags with the branch name as suffix
+        if [[ "$BRANCH" == "master" || "$BRANCH" == "main" ]]; then
+          # Look for tags without a branch suffix (v1.2.3)
+          LATEST_TAG=$(git describe --tags --match "v[0-9]*.[0-9]*.[0-9]*" --abbrev=0 2>/dev/null || echo "none")
+        else
+          # Look for tags with this branch suffix (v1.2.3-branchname)
+          LATEST_TAG=$(git describe --tags --match "v[0-9]*.[0-9]*.[0-9]*-$BRANCH" --abbrev=0 2>/dev/null || echo "none")
+        fi
+        
+        echo "Latest relevant tag: $LATEST_TAG"
 
         if [[ "$LATEST_TAG" == "none" ]]; then
           echo "should_bump=true" >> $GITHUB_OUTPUT
-          echo "Version bump needed: No tags exist yet"
+          echo "Version bump needed: No relevant tags exist yet"
         else
           # Count commits since last tag
           COMMITS_SINCE_TAG=$(git rev-list $LATEST_TAG..HEAD --count)

@@ -111,12 +111,12 @@ jobs:
             echo "gpuminer directory found"
         } else {
             echo "ERROR: gpuminer directory not found. Directory contents:"
-            Get-ChildItem -Path .
+            Get-ChildItem -Path . -Force
             exit 1
         }
         
         # Navigate to the gpuminer directory
-        cd gpuminer
+        Set-Location -Path gpuminer
         
         # Show Cargo.toml contents for debugging
         echo "Cargo.toml contents:"
