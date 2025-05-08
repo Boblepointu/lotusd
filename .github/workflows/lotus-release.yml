@@ -69,11 +69,11 @@ jobs:
         cd ./artifacts
         
         # Clean up any existing directories first to avoid conflicts
-        rm -rf gpu-miner-dir lotus-node-dir lotus-qt-dir lotus-cli-dir
+        rm -rf gpu-miner-dir gpu-miner-windows-dir lotus-node-dir lotus-qt-dir lotus-cli-dir
         
-        # Package the GPU miner binary - check for both names with robust error handling
+        # Package the Linux GPU miner binary - check for both names with robust error handling
         if [ -f "lotus-miner-cli" ] || [ -f "lotus-gpu-miner" ]; then
-          echo "Found GPU miner binary, packaging it..."
+          echo "Found Linux GPU miner binary, packaging it..."
           
           # Create directory for GPU miner
           mkdir -p gpu-miner-dir
@@ -100,19 +100,77 @@ jobs:
           fi
           
           # Create tarball
-          echo "Creating GPU miner tarball..."
-          tar -czvf ../individual-packages/lotus-gpu-miner-${{ inputs.version }}.tar.gz gpu-miner-dir/
+          echo "Creating Linux GPU miner tarball..."
+          tar -czvf ../individual-packages/lotus-gpu-miner-linux-${{ inputs.version }}.tar.gz gpu-miner-dir/
           
           # Create zip
-          echo "Creating GPU miner zip..."
+          echo "Creating Linux GPU miner zip..."
           cd gpu-miner-dir
-          zip -r ../../individual-packages/lotus-gpu-miner-${{ inputs.version }}.zip .
+          zip -r ../../individual-packages/lotus-gpu-miner-linux-${{ inputs.version }}.zip .
           cd ..
           
           # Clean up
           rm -rf gpu-miner-dir
         else
-          echo "WARNING: GPU miner binary not found! Checking directory contents:"
+          echo "WARNING: Linux GPU miner binary not found! Checking directory contents:"
+          ls -la
+        fi
+        
+        # Package the Windows GPU miner binary
+        if [ -f "lotus-miner-cli.exe" ] || [ -f "lotus-gpu-miner.exe" ]; then
+          echo "Found Windows GPU miner binary, packaging it..."
+          
+          # Create directory for Windows GPU miner
+          mkdir -p gpu-miner-windows-dir
+          
+          # Copy the Windows binaries
+          if [ -f "lotus-miner-cli.exe" ]; then
+            cp -v lotus-miner-cli.exe gpu-miner-windows-dir/
+          fi
+          
+          if [ -f "lotus-gpu-miner.exe" ]; then
+            cp -v lotus-gpu-miner.exe gpu-miner-windows-dir/
+          fi
+          
+          # Include required kernels - this is critical for the miner to work
+          # First, look for kernels in artifacts/kernels (from Windows artifact)
+          if [ -d "./kernels" ]; then
+            echo "Found kernels directory in artifacts, copying..."
+            mkdir -p gpu-miner-windows-dir/kernels
+            cp -rv kernels/* gpu-miner-windows-dir/kernels/ || true
+          else
+            echo "WARNING: No kernels directory found in artifacts!"
+            # Try to locate kernels anywhere in the artifacts
+            find . -type f -name "*.cl" -o -name "*.h" > ./kernels-list.txt
+            if [ -s "./kernels-list.txt" ]; then
+              echo "Found kernel files elsewhere in artifacts, copying..."
+              mkdir -p gpu-miner-windows-dir/kernels
+              while read -r kernel_file; do
+                cp -v "$kernel_file" gpu-miner-windows-dir/kernels/
+              done < ./kernels-list.txt
+            else
+              echo "WARNING: No kernel files found anywhere in artifacts!"
+              # Fallback option: try to get kernels from the repo
+              if [ -d "$GITHUB_WORKSPACE/gpuminer/kernels" ]; then
+                echo "Falling back to kernels from repository..."
+                mkdir -p gpu-miner-windows-dir/kernels
+                cp -rv "$GITHUB_WORKSPACE/gpuminer/kernels/"* gpu-miner-windows-dir/kernels/ || true
+              else
+                echo "ERROR: Could not find any kernel files! Miner may not work properly."
+              fi
+            fi
+          fi
+          
+          # Create zip for Windows (no tarball for Windows)
+          echo "Creating Windows GPU miner zip..."
+          cd gpu-miner-windows-dir
+          zip -r ../../individual-packages/lotus-gpu-miner-windows-${{ inputs.version }}.zip .
+          cd ..
+          
+          # Clean up
+          rm -rf gpu-miner-windows-dir
+        else
+          echo "WARNING: Windows GPU miner binary not found! Checking directory contents:"
           ls -la
         fi
         
@@ -313,8 +371,13 @@ jobs:
         * [Combined Binary Package (zip)](https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/lotus-binaries-${VERSION}.zip)
 
         #### Individual Component Packages
-        * [GPU Miner (tar.gz)](https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/lotus-gpu-miner-${VERSION}.tar.gz)
-        * [GPU Miner (zip)](https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/lotus-gpu-miner-${VERSION}.zip)
+        
+        ##### GPU Miner
+        * [GPU Miner for Linux (tar.gz)](https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/lotus-gpu-miner-linux-${VERSION}.tar.gz)
+        * [GPU Miner for Linux (zip)](https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/lotus-gpu-miner-linux-${VERSION}.zip)
+        * [GPU Miner for Windows (zip)](https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/lotus-gpu-miner-windows-${VERSION}.zip)
+        
+        ##### Other Components
         * [Lotus Node (tar.gz)](https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/lotus-node-${VERSION}.tar.gz)
         * [Lotus Node (zip)](https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/lotus-node-${VERSION}.zip)
         * [Lotus QT Wallet (tar.gz)](https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/lotus-qt-${VERSION}.tar.gz)
@@ -349,11 +412,11 @@ jobs:
         docker run -d --name lotus-node -p 10605:10605 -p 10604:10604 -v lotus-data:/root/.lotus ghcr.io/${REPO_OWNER_LC}/lotus-node:${VERSION}
         \`\`\`
 
-        ### GPU Miner Installation
+        ### GPU Miner Installation (Linux)
         \`\`\`bash
         # Using tar.gz
-        wget https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/lotus-gpu-miner-${VERSION}.tar.gz
-        tar -xzf lotus-gpu-miner-${VERSION}.tar.gz
+        wget https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/lotus-gpu-miner-linux-${VERSION}.tar.gz
+        tar -xzf lotus-gpu-miner-linux-${VERSION}.tar.gz
         cd gpu-miner-dir
         chmod +x lotus-miner-cli
         ./lotus-miner-cli -g 0 -s 27 -o YOUR_LOTUS_ADDRESS -i 1 -a https://burnlotus.org -m
@@ -361,11 +424,30 @@ jobs:
         # ./lotus-gpu-miner -g 0 -s 27 -o YOUR_LOTUS_ADDRESS -i 1 -a https://burnlotus.org -m
         
         # Using zip
-        wget https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/lotus-gpu-miner-${VERSION}.zip
-        unzip lotus-gpu-miner-${VERSION}.zip -d gpu-miner-dir
+        wget https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/lotus-gpu-miner-linux-${VERSION}.zip
+        unzip lotus-gpu-miner-linux-${VERSION}.zip -d gpu-miner-dir
         cd gpu-miner-dir
         chmod +x lotus-miner-cli
         ./lotus-miner-cli -g 0 -s 27 -o YOUR_LOTUS_ADDRESS -i 1 -a https://burnlotus.org -m
+        \`\`\`
+        
+        ### GPU Miner Installation (Windows)
+        \`\`\`
+        # Download the Windows miner zip file
+        # https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/lotus-gpu-miner-windows-${VERSION}.zip
+        
+        # Extract the zip file to a folder
+        # Right-click the zip file and select "Extract All..."
+        
+        # Open a command prompt in the extracted folder
+        # Run the miner with your Lotus address (replace YOUR_LOTUS_ADDRESS)
+        lotus-miner-cli.exe -g 0 -s 27 -o YOUR_LOTUS_ADDRESS -i 1 -a https://burnlotus.org -m
+        
+        # You can also use the other executable name:
+        # lotus-gpu-miner.exe -g 0 -s 27 -o YOUR_LOTUS_ADDRESS -i 1 -a https://burnlotus.org -m
+        
+        # IMPORTANT: Make sure the 'kernels' directory is in the same folder as the executable
+        # or the miner will not work properly.
         \`\`\`
 
         ## 📋 System Requirements

@@ -54,7 +54,7 @@ jobs:
     secrets: inherit
 
   build-miner:
-    name: ⛏️ Mining Components
+    name: ⛏️ Mining Components (Linux + Windows)
     needs: [ version-management ]
     if: always() && (needs.version-management.outputs.should_bump == 'false' || needs.version-management.outputs.version_bumped == 'true')
     uses: ./.github/workflows/lotus-miner-build.yml

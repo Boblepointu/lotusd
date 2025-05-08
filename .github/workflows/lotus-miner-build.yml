@@ -7,10 +7,14 @@ on:
         description: "The version to build"
         required: true
         type: string
+    outputs:
+      build_status:
+        description: "The status of the build"
+        value: ${{ jobs.overall-status.outputs.status }}
 
 jobs:
   build-lotus-gpu-miner:
-    name: 🔥 Build lotus-gpu-miner
+    name: 🔥 Build lotus-gpu-miner (Linux)
     runs-on: ubuntu-latest
     outputs:
       build_status: ${{ job.status }}
@@ -160,7 +164,7 @@ jobs:
       if: github.event_name != 'pull_request'
       uses: actions/upload-artifact@v4
       with:
-        name: lotus-gpu-miner-${{ inputs.version }}
+        name: lotus-gpu-miner-linux-${{ inputs.version }}
         path: ./artifacts/lotus*
         retention-days: 14
     
@@ -168,7 +172,39 @@ jobs:
     - name: Upload debug info
       uses: actions/upload-artifact@v4
       with:
-        name: lotus-gpu-miner-debug-${{ inputs.version }}
+        name: lotus-gpu-miner-linux-debug-${{ inputs.version }}
         path: ./debug-info/
         retention-days: 3
+
+  # Call the Windows build workflow
+  build-lotus-gpu-miner-windows:
+    name: 🪟 Build lotus-gpu-miner (Windows)
+    uses: ./.github/workflows/lotus-miner-windows-build.yml
+    with:
+      version: ${{ inputs.version }}
+    secrets: inherit
+
+  # Overall status job to consolidate build results
+  overall-status:
+    name: 📊 Overall build status
+    needs: [build-lotus-gpu-miner, build-lotus-gpu-miner-windows]
+    if: always()
+    runs-on: ubuntu-latest
+    outputs:
+      status: ${{ job.status }}
+    
+    steps:
+      - name: Check build status
+        run: |
+          if [ "${{ needs.build-lotus-gpu-miner.result }}" != "success" ]; then
+            echo "Linux build failed with status: ${{ needs.build-lotus-gpu-miner.result }}"
+            exit 1
+          fi
+          
+          if [ "${{ needs.build-lotus-gpu-miner-windows.result }}" != "success" ]; then
+            echo "Windows build failed with status: ${{ needs.build-lotus-gpu-miner-windows.result }}"
+            exit 1
+          fi
+          
+          echo "All builds completed successfully!"
         

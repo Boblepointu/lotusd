@@ -1,0 +1,117 @@
+name: ⛏️ Lotus Miner Windows Build
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "The version to build"
+        required: true
+        type: string
+    outputs:
+      build_status:
+        description: "The status of the build"
+        value: ${{ jobs.build-lotus-gpu-miner-windows.outputs.build_status }}
+
+jobs:
+  build-lotus-gpu-miner-windows:
+    name: 🪟 Build Windows lotus-gpu-miner
+    runs-on: windows-latest
+    outputs:
+      build_status: ${{ job.status }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        ref: master
+
+    - name: Setup Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        profile: minimal
+        override: true
+        components: rustfmt, clippy
+
+    - name: Setup CUDA
+      uses: Jimver/cuda-toolkit@v0.2.11
+      with:
+        cuda: '12.2.0'
+        method: 'network'
+        sub-packages: '["nvcc","cublas","cublas_dev","cudart","cudart_dev","curand","curand_dev"]'
+
+    - name: Cache Rust dependencies
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: "gpuminer -> target"
+
+    - name: Create artifacts directory
+      shell: pwsh
+      run: |
+        New-Item -ItemType Directory -Force -Path ./artifacts
+        New-Item -ItemType Directory -Force -Path ./debug-info
+
+    - name: Build Windows miner
+      shell: pwsh
+      run: |
+        echo "Starting Windows GPU miner build..."
+        
+        # Set environment variables for the build
+        $env:CUDA_PATH = "$env:CUDA_PATH_V12_2"
+        
+        # Navigate to the gpuminer directory
+        cd gpuminer
+        
+        # Build the miner in release mode
+        cargo build --release --package lotus-miner-cli
+        
+        if ($LASTEXITCODE -ne 0) {
+          echo "ERROR: Cargo build failed!"
+          exit 1
+        }
+        
+        # Copy the binary to artifacts directory
+        cp -v target/release/lotus-miner-cli.exe ../artifacts/
+        
+        # Create a copy with alternative name
+        cp -v ../artifacts/lotus-miner-cli.exe ../artifacts/lotus-gpu-miner.exe
+        
+        # Copy kernels directory (important for GPU operation)
+        cp -r kernels ../artifacts/
+        
+        # Verify files exist
+        echo "Contents of artifacts directory:"
+        ls -la ../artifacts/
+        
+        # Save file metadata
+        echo "Build completed. Writing debug information..."
+        ls -la ../artifacts > ../debug-info/artifacts-list.txt
+        Get-ChildItem -Recurse ../artifacts | Select-Object FullName, Length | Format-Table -AutoSize > ../debug-info/detailed-artifacts.txt
+        
+        # Capture Rust version info
+        rustc --version > ../debug-info/rust-version-info.txt
+        cargo --version >> ../debug-info/rust-version-info.txt
+        
+        # Capture CUDA version info
+        nvcc --version > ../debug-info/cuda-version-info.txt
+        
+        echo "Windows build completed successfully."
+
+    # Upload Windows GPU miner binary artifacts with kernels
+    - name: Upload Windows GPU miner artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: lotus-gpu-miner-windows-${{ inputs.version }}
+        path: |
+          ./artifacts/*.exe
+          ./artifacts/kernels/
+        retention-days: 14
+    
+    # Upload debug info
+    - name: Upload debug info
+      uses: actions/upload-artifact@v4
+      with:
+        name: lotus-gpu-miner-windows-debug-${{ inputs.version }}
+        path: ./debug-info/
+        retention-days: 3
+        
