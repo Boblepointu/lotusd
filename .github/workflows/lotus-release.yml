@@ -267,10 +267,25 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
-        ref: master
         fetch-depth: 0
+
+    - name: Determine branch for tagging
+      id: determine-branch
+      run: |
+        # Extract branch name from version string
+        VERSION="${{ inputs.version }}"
+        
+        if [[ "$VERSION" == *-dev ]]; then
+          # For dev releases, use the dev branch
+          echo "tag_branch=dev" >> $GITHUB_OUTPUT
+          echo "Using dev branch for tag"
+        else
+          # Default to master branch for other releases
+          echo "tag_branch=master" >> $GITHUB_OUTPUT
+          echo "Using master branch for tag"
+        fi
 
     - name: Check if tag exists
       id: check-tag
@@ -292,20 +307,21 @@ jobs:
         git config --global user.email "actions@github.com"
 
         VERSION="${{ inputs.version }}"
+        BRANCH="${{ steps.determine-branch.outputs.tag_branch }}"
         
-        # Fetch the latest changes first
-        git fetch origin master
+        # Fetch the latest changes for the branch
+        git fetch origin $BRANCH
         
-        # Make sure we're on the latest master with rebase
-        git checkout master
-        git reset --hard origin/master
+        # Make sure we're on the right branch with rebase
+        git checkout $BRANCH
+        git reset --hard origin/$BRANCH
         
         # Create and push the tag
         git tag -a "v$VERSION" -m "Release v$VERSION"
         git push origin "v$VERSION"
         
         echo "tag_created=true" >> $GITHUB_OUTPUT
-        echo "Tag v$VERSION created and pushed successfully"
+        echo "Tag v$VERSION created and pushed successfully on branch $BRANCH"
 
   # Create the GitHub release
   publish-release:
@@ -316,10 +332,25 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
-        ref: master
         fetch-depth: 0
+
+    - name: Determine branch for release
+      id: determine-branch
+      run: |
+        # Extract branch name from version string
+        VERSION="${{ inputs.version }}"
+        
+        if [[ "$VERSION" == *-dev ]]; then
+          # For dev releases, use the dev branch
+          echo "release_branch=dev" >> $GITHUB_OUTPUT
+          echo "Using dev branch for release"
+        else
+          # Default to master branch for other releases
+          echo "release_branch=master" >> $GITHUB_OUTPUT
+          echo "Using master branch for release"
+        fi
 
     # Streamline artifact download - download directly to release-packages
     - name: Download combined packages
@@ -347,6 +378,7 @@ jobs:
       run: |
         VERSION="${{ inputs.version }}"
         REPO_OWNER_LC=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')
+        BRANCH="${{ steps.determine-branch.outputs.release_branch }}"
 
         # Get commit history for changelog
         PREV_TAG=$(git describe --tags --abbrev=0 --exclude="v${VERSION}" 2>/dev/null || echo "")
@@ -356,13 +388,66 @@ jobs:
           CHANGELOG=$(git log --pretty=format:"- %s by %an" ${PREV_TAG}..HEAD)
         fi
 
+        # Set prerelease status based on branch
+        IS_PRERELEASE="false"
+        RELEASE_TITLE="Lotus Root v${VERSION} Release"
+        if [[ "$BRANCH" == "dev" ]]; then
+          IS_PRERELEASE="true"
+          RELEASE_TITLE="Lotus Root v${VERSION} Development Release"
+        fi
+        
+        # Save prerelease status for later use
+        echo "is_prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+
         # Create release notes
         cat > release_notes.md << EOF
-        # 🚀 Lotus Root v${VERSION} Release
+        # 🚀 ${RELEASE_TITLE}
 
         ![Lotus Logo](https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/master/share/pixmaps/lotus64.png)
 
-        ## 📦 Binaries and Docker Images
+        ## 📦 Quick Download Links
+
+        ### GPU Miners
+        
+        #### ⭐ Windows GPU Miner (Recommended for most users)
+        * [Download GPU Miner for Windows](https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/lotus-gpu-miner-windows-${VERSION}.zip)
+        
+        #### Linux GPU Miner
+        * [Download GPU Miner for Linux (tar.gz)](https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/lotus-gpu-miner-linux-${VERSION}.tar.gz)
+        * [Download GPU Miner for Linux (zip)](https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/lotus-gpu-miner-linux-${VERSION}.zip)
+
+        ### Other Components
+        * [Lotus Node (zip)](https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/lotus-node-${VERSION}.zip)
+        * [Lotus QT Wallet (zip)](https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/lotus-qt-${VERSION}.zip)
+        * [Combined Binary Package (zip)](https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/lotus-binaries-${VERSION}.zip)
+
+        ## 💡 Installation Instructions
+
+        ### Windows GPU Miner
+        1. [Download the Windows miner zip file](https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/lotus-gpu-miner-windows-${VERSION}.zip)
+        2. Extract the zip file to a folder of your choice
+        3. Open a command prompt in the extracted folder
+        4. Run the miner with your Lotus address:
+        
+        \`\`\`
+        lotus-miner-cli.exe -g 0 -s 27 -o YOUR_LOTUS_ADDRESS -i 1 -a https://burnlotus.org -m
+        \`\`\`
+        
+        > 🔍 **IMPORTANT**: Make sure the 'kernels' directory is in the same folder as the executable or the miner will not work properly.
+
+        ### Linux GPU Miner
+        \`\`\`bash
+        # Download and extract
+        wget https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/lotus-gpu-miner-linux-${VERSION}.tar.gz
+        tar -xzf lotus-gpu-miner-linux-${VERSION}.tar.gz
+        cd gpu-miner-dir
+        
+        # Run the miner
+        chmod +x lotus-miner-cli
+        ./lotus-miner-cli -g 0 -s 27 -o YOUR_LOTUS_ADDRESS -i 1 -a https://burnlotus.org -m
+        \`\`\`
+
+        ## 📦 Complete Downloads List
 
         ### Binary Packages
 
@@ -401,60 +486,11 @@ jobs:
         ### Changelog
         ${CHANGELOG}
 
-        ## 💡 Installation Instructions
-
-        ### Docker Installation
-        \`\`\`bash
-        # Pull the Lotus node image
-        docker pull ghcr.io/${REPO_OWNER_LC}/lotus-node:${VERSION}
-
-        # Run a Lotus node
-        docker run -d --name lotus-node -p 10605:10605 -p 10604:10604 -v lotus-data:/root/.lotus ghcr.io/${REPO_OWNER_LC}/lotus-node:${VERSION}
-        \`\`\`
-
-        ### GPU Miner Installation (Linux)
-        \`\`\`bash
-        # Using tar.gz
-        wget https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/lotus-gpu-miner-linux-${VERSION}.tar.gz
-        tar -xzf lotus-gpu-miner-linux-${VERSION}.tar.gz
-        cd gpu-miner-dir
-        chmod +x lotus-miner-cli
-        ./lotus-miner-cli -g 0 -s 27 -o YOUR_LOTUS_ADDRESS -i 1 -a https://burnlotus.org -m
-        # You can also use the symlink:
-        # ./lotus-gpu-miner -g 0 -s 27 -o YOUR_LOTUS_ADDRESS -i 1 -a https://burnlotus.org -m
-        
-        # Using zip
-        wget https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/lotus-gpu-miner-linux-${VERSION}.zip
-        unzip lotus-gpu-miner-linux-${VERSION}.zip -d gpu-miner-dir
-        cd gpu-miner-dir
-        chmod +x lotus-miner-cli
-        ./lotus-miner-cli -g 0 -s 27 -o YOUR_LOTUS_ADDRESS -i 1 -a https://burnlotus.org -m
-        \`\`\`
-        
-        ### GPU Miner Installation (Windows)
-        \`\`\`
-        # Download the Windows miner zip file
-        # https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/lotus-gpu-miner-windows-${VERSION}.zip
-        
-        # Extract the zip file to a folder
-        # Right-click the zip file and select "Extract All..."
-        
-        # Open a command prompt in the extracted folder
-        # Run the miner with your Lotus address (replace YOUR_LOTUS_ADDRESS)
-        lotus-miner-cli.exe -g 0 -s 27 -o YOUR_LOTUS_ADDRESS -i 1 -a https://burnlotus.org -m
-        
-        # You can also use the other executable name:
-        # lotus-gpu-miner.exe -g 0 -s 27 -o YOUR_LOTUS_ADDRESS -i 1 -a https://burnlotus.org -m
-        
-        # IMPORTANT: Make sure the 'kernels' directory is in the same folder as the executable
-        # or the miner will not work properly.
-        \`\`\`
-
         ## 📋 System Requirements
         - **OS**: Ubuntu 22.04 or newer, Windows 10+, macOS 11+
         - **RAM**: 4GB minimum, 8GB recommended
         - **Storage**: 16GB minimum, SSD recommended
-        - **GPU Mining**: NVIDIA GPU with CUDA support
+        - **GPU Mining**: NVIDIA GPU with CUDA support or AMD GPU with OpenCL support
 
         ## 🔗 Additional Resources
         - [Official Website](https://lotusia.org)
@@ -479,7 +515,7 @@ jobs:
         body: ${{ steps.generate-notes.outputs.release_notes }}
         files: ./release-packages/*
         draft: false
-        prerelease: false
+        prerelease: ${{ steps.generate-notes.outputs.is_prerelease }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
