@@ -8,7 +8,7 @@ concurrency:
 
 on:
   push:
-    branches: [ main, master, develop, windowsMiner ]
+    branches: [ main, master, develop, dev, windowsMiner ]
     tags: [ 'v*' ]
   pull_request:
     branches: [ main, master ]
@@ -45,7 +45,7 @@ jobs:
             FULL_VERSION="$BASE_VERSION-$BRANCH"
           fi
           
-          echo "full_version=$FULL_VERSION" >> $GITHUB_OUTPUT
+          echo "full_version=$FULL_VERSION" >> "$GITHUB_OUTPUT"
           echo "Full version: $FULL_VERSION"
 
   # Build all components in parallel (no skipping based on branch)

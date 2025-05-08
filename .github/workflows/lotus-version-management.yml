@@ -33,7 +33,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -41,7 +41,7 @@ jobs:
       id: get-version
       run: |
         VERSION=$(grep -Po "VERSION\s+\K[0-9]+\.[0-9]+\.[0-9]+" CMakeLists.txt)
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
         echo "Current version: $VERSION"
 
     - name: Check if version bump is needed
@@ -67,7 +67,7 @@ jobs:
         
         if [ -z "$MATCHING_TAGS" ]; then
           echo "No matching tags found for pattern: $TAG_PATTERN"
-          echo "should_bump=true" >> $GITHUB_OUTPUT
+          echo "should_bump=true" >> "$GITHUB_OUTPUT"
           echo "Version bump needed: No relevant tags exist yet"
           exit 0
         fi
@@ -82,14 +82,14 @@ jobs:
           echo "Commits since tag $LATEST_TAG: $COMMITS_SINCE_TAG"
           
           if [ "$COMMITS_SINCE_TAG" -gt 0 ]; then
-            echo "should_bump=true" >> $GITHUB_OUTPUT
+            echo "should_bump=true" >> "$GITHUB_OUTPUT"
             echo "Version bump needed: $COMMITS_SINCE_TAG commits since last tag"
           else
-            echo "should_bump=false" >> $GITHUB_OUTPUT
+            echo "should_bump=false" >> "$GITHUB_OUTPUT"
             echo "Version bump not needed: No new commits since last tag"
           fi
         else
-          echo "should_bump=true" >> $GITHUB_OUTPUT
+          echo "should_bump=true" >> "$GITHUB_OUTPUT"
           echo "Version bump needed: Could not determine last tag"
         fi
 
@@ -105,7 +105,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -119,7 +119,7 @@ jobs:
         # Increment patch version
         PATCH=$((PATCH + 1))
         NEW_VERSION="$MAJOR.$MINOR.$PATCH"
-        echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+        echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
         echo "Current: $CURRENT_VERSION -> New: $NEW_VERSION"
 
         # Update CMakeLists.txt
@@ -151,7 +151,7 @@ jobs:
         # Push with force-with-lease for safety
         git push --force-with-lease origin HEAD:$BRANCH
 
-        echo "version_bumped=true" >> $GITHUB_OUTPUT
+        echo "version_bumped=true" >> "$GITHUB_OUTPUT"
         echo "Version bumped and committed successfully"
 
   # Prepare for potential revert
@@ -173,7 +173,7 @@ jobs:
         # Calculate the previous version
         PREV_PATCH=$((PATCH - 1))
         PREV_VERSION="$MAJOR.$MINOR.$PREV_PATCH"
-        echo "prev_version=$PREV_VERSION" >> $GITHUB_OUTPUT
+        echo "prev_version=$PREV_VERSION" >> "$GITHUB_OUTPUT"
         echo "Current version: $CURRENT_VERSION, Previous version: $PREV_VERSION"
 
     # This job will be referenced by other workflows, but doesn't do anything unless told to
@@ -181,5 +181,5 @@ jobs:
     - name: Mark status
       id: mark-status
       run: |
-        echo "revert_status=ready" >> $GITHUB_OUTPUT
+        echo "revert_status=ready" >> "$GITHUB_OUTPUT"
         echo "Revert preparation completed successfully" 
