@@ -23,7 +23,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
       with:
-        ref: master
+        ref: ${{ github.ref_name }}
 
     - name: Setup Rust
       uses: actions-rs/toolchain@v1
@@ -56,18 +56,49 @@ jobs:
       run: |
         echo "Starting Windows GPU miner build..."
         
+        # Debug information
+        echo "Current directory: $(Get-Location)"
+        echo "Branch name: $env:GITHUB_REF_NAME"
+        
         # Set environment variables for the build
         $env:CUDA_PATH = "$env:CUDA_PATH_V12_2"
+        
+        # Check if gpuminer directory exists
+        if (Test-Path -Path "gpuminer") {
+            echo "gpuminer directory found"
+        } else {
+            echo "ERROR: gpuminer directory not found. Directory contents:"
+            Get-ChildItem -Path .
+            exit 1
+        }
         
         # Navigate to the gpuminer directory
         cd gpuminer
         
-        # Build the miner in release mode
-        cargo build --release --package lotus-miner-cli
+        # Show Cargo.toml contents for debugging
+        echo "Cargo.toml contents:"
+        if (Test-Path -Path "Cargo.toml") {
+            Get-Content -Path "Cargo.toml"
+        } else {
+            echo "ERROR: Cargo.toml not found!"
+            exit 1
+        }
+        
+        # Build the miner in release mode with verbose output
+        echo "Running cargo build..."
+        cargo build --release --package lotus-miner-cli -v
         
         if ($LASTEXITCODE -ne 0) {
           echo "ERROR: Cargo build failed!"
           exit 1
+        }
+        
+        # Verify target directory exists
+        if (Test-Path -Path "target/release") {
+            echo "Release build directory exists"
+        } else {
+            echo "ERROR: Release build directory not found!"
+            exit 1
         }
         
         # Copy the binary to artifacts directory

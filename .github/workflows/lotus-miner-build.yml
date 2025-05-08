@@ -23,7 +23,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
       with:
-        ref: master
+        ref: ${{ github.ref_name }}
 
     - name: Setup Docker
       uses: docker/setup-buildx-action@v2
@@ -161,7 +161,6 @@ jobs:
 
     # Upload GPU miner binary artifacts with updated path pattern
     - name: Upload GPU miner artifacts
-      if: github.event_name != 'pull_request'
       uses: actions/upload-artifact@v4
       with:
         name: lotus-gpu-miner-linux-${{ inputs.version }}

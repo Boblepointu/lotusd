@@ -25,11 +25,28 @@ jobs:
     uses: ./.github/workflows/lotus-version-management.yml
     secrets: inherit
 
+  # Special handling for Windows miner development (skip all builds except miner)
+  check-windows-branch:
+    name: 🔍 Check for Windows branch
+    runs-on: ubuntu-latest
+    outputs:
+      is_windows_branch: ${{ steps.check-branch.outputs.is_windows_branch }}
+    steps:
+      - name: Check branch name
+        id: check-branch
+        run: |
+          if [[ "${{ github.ref_name }}" == "windowsMiner" ]]; then
+            echo "is_windows_branch=true" >> $GITHUB_OUTPUT
+            echo "Running on windowsMiner branch, will skip non-miner builds"
+          else
+            echo "is_windows_branch=false" >> $GITHUB_OUTPUT
+          fi
+
   # Build components in parallel
   build-core:
     name: 🏗️ Core Components
-    needs: [ version-management ]
-    if: always() && (needs.version-management.outputs.should_bump == 'false' || needs.version-management.outputs.version_bumped == 'true')
+    needs: [ version-management, check-windows-branch ]
+    if: always() && needs.check-windows-branch.outputs.is_windows_branch != 'true' && (needs.version-management.outputs.should_bump == 'false' || needs.version-management.outputs.version_bumped == 'true')
     uses: ./.github/workflows/lotus-core-build.yml
     with:
       version: ${{ needs.version-management.outputs.version }}
@@ -37,8 +54,8 @@ jobs:
 
   build-tools:
     name: 🔧 Tool Components
-    needs: [ version-management ]
-    if: always() && (needs.version-management.outputs.should_bump == 'false' || needs.version-management.outputs.version_bumped == 'true')
+    needs: [ version-management, check-windows-branch ]
+    if: always() && needs.check-windows-branch.outputs.is_windows_branch != 'true' && (needs.version-management.outputs.should_bump == 'false' || needs.version-management.outputs.version_bumped == 'true')
     uses: ./.github/workflows/lotus-tools-build.yml
     with:
       version: ${{ needs.version-management.outputs.version }}
@@ -46,8 +63,8 @@ jobs:
 
   build-gui:
     name: 🖥️ GUI Components
-    needs: [ version-management ]
-    if: always() && (needs.version-management.outputs.should_bump == 'false' || needs.version-management.outputs.version_bumped == 'true')
+    needs: [ version-management, check-windows-branch ]
+    if: always() && needs.check-windows-branch.outputs.is_windows_branch != 'true' && (needs.version-management.outputs.should_bump == 'false' || needs.version-management.outputs.version_bumped == 'true')
     uses: ./.github/workflows/lotus-gui-build.yml
     with:
       version: ${{ needs.version-management.outputs.version }}
@@ -55,18 +72,18 @@ jobs:
 
   build-miner:
     name: ⛏️ Mining Components (Linux + Windows)
-    needs: [ version-management ]
-    if: always() && (needs.version-management.outputs.should_bump == 'false' || needs.version-management.outputs.version_bumped == 'true')
+    needs: [ version-management, check-windows-branch ]
+    if: always() && (needs.check-windows-branch.outputs.is_windows_branch == 'true' || needs.version-management.outputs.should_bump == 'false' || needs.version-management.outputs.version_bumped == 'true')
     uses: ./.github/workflows/lotus-miner-build.yml
     with:
-      version: ${{ needs.version-management.outputs.version }}
+      version: ${{ needs.check-windows-branch.outputs.is_windows_branch == 'true' && 'windows-dev' || needs.version-management.outputs.version }}
     secrets: inherit
 
   # Revert version if any builds failed
   revert-version:
     name: ⏮️ Revert Version
-    needs: [ version-management, build-core, build-tools, build-gui, build-miner ]
-    if: always() && needs.version-management.outputs.version_bumped == 'true' && (needs.build-core.result == 'failure' || needs.build-tools.result == 'failure' || needs.build-gui.result == 'failure' || needs.build-miner.result == 'failure')
+    needs: [ version-management, check-windows-branch, build-core, build-tools, build-gui, build-miner ]
+    if: always() && needs.check-windows-branch.outputs.is_windows_branch != 'true' && needs.version-management.outputs.version_bumped == 'true' && (needs.build-core.result == 'failure' || needs.build-tools.result == 'failure' || needs.build-gui.result == 'failure' || needs.build-miner.result == 'failure')
     uses: ./.github/workflows/lotus-version-revert.yml
     with:
       current_version: ${{ needs.version-management.outputs.version }}
@@ -77,8 +94,8 @@ jobs:
   # Release process
   release:
     name: 🚀 Release
-    needs: [ version-management, build-core, build-tools, build-gui, build-miner, revert-version ]
-    if: always() && github.ref == 'refs/heads/master' && github.event_name == 'push' && needs.build-core.result == 'success' && needs.build-tools.result == 'success' && needs.build-gui.result == 'success' && needs.build-miner.result == 'success' && (needs.revert-version.result == 'skipped' || needs.revert-version.result == 'success')
+    needs: [ version-management, check-windows-branch, build-core, build-tools, build-gui, build-miner, revert-version ]
+    if: always() && needs.check-windows-branch.outputs.is_windows_branch != 'true' && github.ref == 'refs/heads/master' && github.event_name == 'push' && needs.build-core.result == 'success' && needs.build-tools.result == 'success' && needs.build-gui.result == 'success' && needs.build-miner.result == 'success' && (needs.revert-version.result == 'skipped' || needs.revert-version.result == 'success')
     uses: ./.github/workflows/lotus-release.yml
     with:
       version: ${{ needs.version-management.outputs.version }}
