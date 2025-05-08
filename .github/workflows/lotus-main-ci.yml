@@ -52,7 +52,7 @@ jobs:
   build-core:
     name: 🏗️ Core Components
     needs: [ version-management, set-version ]
-    if: always() && (needs.version-management.outputs.should_bump == 'false' || needs.version-management.outputs.version_bumped == 'true')
+    if: always()
     uses: ./.github/workflows/lotus-core-build.yml
     with:
       version: ${{ needs.set-version.outputs.full_version }}
@@ -61,7 +61,7 @@ jobs:
   build-tools:
     name: 🔧 Tool Components
     needs: [ version-management, set-version ]
-    if: always() && (needs.version-management.outputs.should_bump == 'false' || needs.version-management.outputs.version_bumped == 'true')
+    if: always()
     uses: ./.github/workflows/lotus-tools-build.yml
     with:
       version: ${{ needs.set-version.outputs.full_version }}
@@ -70,7 +70,7 @@ jobs:
   build-gui:
     name: 🖥️ GUI Components
     needs: [ version-management, set-version ]
-    if: always() && (needs.version-management.outputs.should_bump == 'false' || needs.version-management.outputs.version_bumped == 'true')
+    if: always()
     uses: ./.github/workflows/lotus-gui-build.yml
     with:
       version: ${{ needs.set-version.outputs.full_version }}
@@ -79,7 +79,7 @@ jobs:
   build-miner:
     name: ⛏️ Mining Components
     needs: [ version-management, set-version ]
-    if: always() && (needs.version-management.outputs.should_bump == 'false' || needs.version-management.outputs.version_bumped == 'true')
+    if: always()
     uses: ./.github/workflows/lotus-miner-build.yml
     with:
       version: ${{ needs.set-version.outputs.full_version }}
