@@ -166,11 +166,11 @@ jobs:
         
         # Verify files exist
         echo "Contents of artifacts directory:"
-        ls -la ../artifacts/
+        Get-ChildItem -Path ../artifacts/ -Force
         
         # Save file metadata
         echo "Build completed. Writing debug information..."
-        ls -la ../artifacts > ../debug-info/artifacts-list.txt
+        Get-ChildItem -Path ../artifacts/ > ../debug-info/artifacts-list.txt
         Get-ChildItem -Recurse ../artifacts | Select-Object FullName, Length | Format-Table -AutoSize > ../debug-info/detailed-artifacts.txt
         
         # Capture Rust version info
