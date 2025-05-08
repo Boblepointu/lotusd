@@ -8,7 +8,7 @@ concurrency:
 
 on:
   push:
-    branches: [ main, master, develop ]
+    branches: [ main, master, develop, windowsMiner ]
     tags: [ 'v*' ]
   pull_request:
     branches: [ main, master ]
