@@ -156,13 +156,13 @@ jobs:
         }
         
         # Copy the binary to artifacts directory
-        cp -v target/release/lotus-miner-cli.exe ../artifacts/
+        Copy-Item -Path target/release/lotus-miner-cli.exe -Destination ../artifacts/ -Verbose
         
         # Create a copy with alternative name
-        cp -v ../artifacts/lotus-miner-cli.exe ../artifacts/lotus-gpu-miner.exe
+        Copy-Item -Path ../artifacts/lotus-miner-cli.exe -Destination ../artifacts/lotus-gpu-miner.exe -Verbose
         
         # Copy kernels directory (important for GPU operation)
-        cp -r kernels ../artifacts/
+        Copy-Item -Path kernels -Destination ../artifacts/ -Recurse -Force -Verbose
         
         # Verify files exist
         echo "Contents of artifacts directory:"
