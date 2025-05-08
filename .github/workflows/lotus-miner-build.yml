@@ -17,6 +17,8 @@ jobs:
   build-lotus-gpu-miner:
     name: 🔥 Build lotus-gpu-miner (Linux)
     runs-on: ubuntu-latest
+    # Skip this job if we're on the windowsMiner branch
+    if: ${{ github.ref_name != 'windowsMiner' }}
     outputs:
       build_status: ${{ job.status }}
 
@@ -209,17 +211,30 @@ jobs:
           
           FAILED=0
           
-          if [ "${{ needs.build-lotus-gpu-miner.result }}" != "success" ]; then
-            echo "Linux build failed with status: ${{ needs.build-lotus-gpu-miner.result }}"
-            FAILED=1
+          # If on windowsMiner branch, we only care about the Windows build
+          if [[ "${{ github.ref_name }}" == "windowsMiner" ]]; then
+            echo "On windowsMiner branch - only checking Windows build status"
+            
+            if [[ "${{ needs.build-lotus-gpu-miner-windows.result }}" != "success" ]]; then
+              echo "Windows build failed with status: ${{ needs.build-lotus-gpu-miner-windows.result }}"
+              FAILED=1
+            else
+              echo "Windows build succeeded!"
+            fi
+          else
+            # On other branches, check both Linux and Windows builds
+            if [[ "${{ needs.build-lotus-gpu-miner.result }}" != "success" ]]; then
+              echo "Linux build failed with status: ${{ needs.build-lotus-gpu-miner.result }}"
+              FAILED=1
+            fi
+            
+            if [[ "${{ needs.build-lotus-gpu-miner-windows.result }}" != "success" ]]; then
+              echo "Windows build failed with status: ${{ needs.build-lotus-gpu-miner-windows.result }}"
+              FAILED=1
+            fi
           fi
           
-          if [ "${{ needs.build-lotus-gpu-miner-windows.result }}" != "success" ]; then
-            echo "Windows build failed with status: ${{ needs.build-lotus-gpu-miner-windows.result }}"
-            FAILED=1
-          fi
-          
-          if [ $FAILED -eq 0 ]; then
+          if [[ $FAILED -eq 0 ]]; then
             echo "All builds completed successfully!"
           else
             echo "One or more builds failed!"

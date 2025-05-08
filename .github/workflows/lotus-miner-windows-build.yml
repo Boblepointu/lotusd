@@ -33,6 +33,58 @@ jobs:
         override: true
         components: rustfmt, clippy
 
+    # Install OpenCL SDK for Windows
+    - name: Download OpenCL SDK
+      shell: pwsh
+      run: |
+        echo "Downloading OpenCL SDK..."
+        Invoke-WebRequest -Uri "https://github.com/KhronosGroup/OpenCL-SDK/releases/download/v2023.04.17/OpenCL-SDK-v2023.04.17-Win-x64.zip" -OutFile "opencl-sdk.zip"
+        
+        echo "Extracting OpenCL SDK..."
+        Expand-Archive -Path "opencl-sdk.zip" -DestinationPath "C:\opencl-sdk"
+        
+        echo "Listing OpenCL SDK contents..."
+        Get-ChildItem -Path "C:\opencl-sdk" -Recurse | Where-Object { $_.Name -match "\.lib$" } | Format-Table FullName
+
+    - name: Setup OpenCL environment
+      shell: pwsh
+      run: |
+        echo "Setting up OpenCL environment variables..."
+        
+        # Find OpenCL.lib
+        $openclLib = Get-ChildItem -Path "C:\opencl-sdk" -Recurse -Filter "OpenCL.lib" | Select-Object -First 1
+        if ($openclLib) {
+            echo "Found OpenCL.lib at: $($openclLib.FullName)"
+            $openclLibDir = $openclLib.Directory.FullName
+            echo "OpenCL library directory: $openclLibDir"
+            
+            # Add to environment variables for the job
+            echo "OPENCL_LIB_DIR=$openclLibDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            
+            # Also create system-wide environment variable
+            [System.Environment]::SetEnvironmentVariable("OPENCL_LIB_DIR", $openclLibDir, [System.EnvironmentVariableTarget]::Process)
+            
+            # Add to PATH
+            echo "$openclLibDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        } else {
+            echo "ERROR: Could not find OpenCL.lib in C:\opencl-sdk"
+            exit 1
+        }
+        
+        # Find OpenCL include directory
+        $openclInclude = Get-ChildItem -Path "C:\opencl-sdk" -Recurse -Filter "CL" -Directory | 
+                         Where-Object { Test-Path (Join-Path $_.FullName "opencl.h") } | 
+                         Select-Object -First 1
+        
+        if ($openclInclude) {
+            $openclIncludeDir = $openclInclude.Parent.FullName
+            echo "Found OpenCL include directory: $openclIncludeDir"
+            echo "OPENCL_INCLUDE_DIR=$openclIncludeDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            [System.Environment]::SetEnvironmentVariable("OPENCL_INCLUDE_DIR", $openclIncludeDir, [System.EnvironmentVariableTarget]::Process)
+        } else {
+            echo "WARNING: Could not find OpenCL include directory"
+        }
+
     - name: Cache Rust dependencies
       uses: Swatinem/rust-cache@v2
       with:
@@ -52,6 +104,7 @@ jobs:
         # Debug information
         echo "Current directory: $(Get-Location)"
         echo "Branch name: $env:GITHUB_REF_NAME"
+        echo "OpenCL lib directory: $env:OPENCL_LIB_DIR"
         
         # Check if gpuminer directory exists
         if (Test-Path -Path "gpuminer") {
@@ -72,6 +125,17 @@ jobs:
         } else {
             echo "ERROR: Cargo.toml not found!"
             exit 1
+        }
+        
+        # Set OPENCL_SDK_ROOT environment variable
+        $env:OPENCL_SDK_ROOT = "C:\opencl-sdk"
+        
+        # Update the libraries environment to include OpenCL libs
+        if (Test-Path -Path "$env:OPENCL_LIB_DIR") {
+            echo "Setting RUSTFLAGS with OpenCL library path"
+            $env:RUSTFLAGS = "-L native=$env:OPENCL_LIB_DIR"
+        } else {
+            echo "WARNING: OPENCL_LIB_DIR not set or directory not found"
         }
         
         # Build the miner in release mode with verbose output
